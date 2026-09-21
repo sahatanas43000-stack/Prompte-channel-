@@ -670,18 +670,12 @@ async def start_handler(
 
 async def check_and_post():
 
-    log(
-        "[POST] Starting channel post check..."
-    )
+    log("[POST] Starting channel post check...")
 
     prompt = get_next_prompt()
 
     if not prompt:
-
-        log(
-            "[POST] No NEW prompt available."
-        )
-
+        log("[POST] No NEW prompt available.")
         return
 
     prompt_id = str(
@@ -703,19 +697,13 @@ async def check_and_post():
         ""
     )
 
-    # -----------------------------------------------------
-    # LANDING PAGE URL
-    # -----------------------------------------------------
-
+    # Landing page
     landing_url = (
         f"{RENDER_EXTERNAL_URL}"
         f"/prompt/{prompt_id}"
     )
 
-    # -----------------------------------------------------
-    # REAL CLICKABLE BUTTON
-    # -----------------------------------------------------
-
+    # Real Telegram clickable button
     keyboard = InlineKeyboardMarkup(
         [
             [
@@ -730,7 +718,7 @@ async def check_and_post():
     caption = (
         f"✨ {title}\n\n"
         f"{prompt_text}\n\n"
-        f"👇 Click below to get the prompt."
+        f"👇 Click below to get the full prompt."
     )
 
     log(
@@ -747,12 +735,42 @@ async def check_and_post():
 
         if media_url:
 
+            # First download the image ourselves.
+            # Telegram no longer needs to fetch the
+            # external image URL.
+            image_response = requests.get(
+                media_url,
+                timeout=30,
+                headers={
+                    "User-Agent": "Mozilla/5.0"
+                }
+            )
+
+            image_response.raise_for_status()
+
+            image_path = (
+                f"/tmp/{prompt_id}.jpg"
+            )
+
+            with open(
+                image_path,
+                "wb"
+            ) as f:
+                f.write(
+                    image_response.content
+                )
+
             await app.send_photo(
                 chat_id=CHANNEL_USERNAME,
-                photo=media_url,
+                photo=image_path,
                 caption=caption,
                 reply_markup=keyboard
             )
+
+            try:
+                os.remove(image_path)
+            except Exception:
+                pass
 
         else:
 

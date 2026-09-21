@@ -3,118 +3,208 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ prompt.title }}</title>
-    
-    <!-- Dynamic Adsterra Popunder Ads Code -->
-    {% if popunder_script %}
-    {{ popunder_script | safe }}
-    {% endif %}
+
+    <title>{{ prompt.title }} | Prompte Channel</title>
 
     <style>
         * {
-            margin: 0;
-            padding: 0;
             box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
+
         body {
-            background-color: #0f172a;
-            color: #f8fafc;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+            margin: 0;
             padding: 20px;
+            background: #111827;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
         }
+
         .container {
-            max-width: 500px;
             width: 100%;
-            background: #1e293b;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: #1f2937;
             border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            text-align: center;
+            padding: 20px;
+            overflow: hidden;
         }
-        h2 {
-            font-size: 1.5rem;
-            margin-bottom: 16px;
-            color: #38bdf8;
+
+        h1 {
+            margin-top: 0;
+            font-size: 26px;
         }
-        .media-box {
+
+        .media {
             width: 100%;
+            margin: 20px 0;
             border-radius: 12px;
             overflow: hidden;
-            margin-bottom: 20px;
-            background: #0f172a;
+            background: #000;
         }
-        .media-box img, .media-box video {
+
+        .media img,
+        .media video {
+            display: block;
             width: 100%;
             height: auto;
-            display: block;
+            max-height: 600px;
+            object-fit: contain;
+        }
+
+        .prompt-box {
+            margin-top: 20px;
+            padding: 18px;
+            background: #111827;
             border-radius: 12px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1.7;
+            color: #e5e7eb;
         }
-        .btn-download {
-            display: inline-block;
+
+        .buttons {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .btn {
+            display: block;
             width: 100%;
-            padding: 16px;
-            background: linear-gradient(135deg, #2563eb, #0284c7);
-            color: #ffffff;
-            font-weight: bold;
-            font-size: 1.1rem;
-            border: none;
+            padding: 14px 18px;
             border-radius: 10px;
-            cursor: pointer;
+            text-align: center;
             text-decoration: none;
-            transition: transform 0.2s, background 0.3s;
+            font-weight: bold;
         }
-        .btn-download:hover {
-            transform: translateY(-2px);
-            background: linear-gradient(135deg, #1d4ed8, #0369a1);
+
+        .telegram {
+            background: #229ed9;
+            color: #ffffff;
         }
-        .info-text {
-            font-size: 0.85rem;
-            color: #94a3b8;
-            margin-top: 12px;
+
+        .ad {
+            background: #374151;
+            color: #ffffff;
+        }
+
+        .warning {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 10px;
+            background: #451a03;
+            color: #fbbf24;
+            font-size: 14px;
+        }
+
+        .small {
+            margin-top: 15px;
+            color: #9ca3af;
+            font-size: 13px;
+            text-align: center;
         }
     </style>
 </head>
+
 <body>
 
 <div class="container">
-    <h2>{{ prompt.title }}</h2>
 
-    <div class="media-box">
-        {% if prompt.media_type == 'video' %}
-            <video controls autoplay loop muted src="{{ prompt.media_url }}"></video>
-        {% else %}
-            <img src="{{ prompt.media_url }}" alt="AI Prompt Preview">
+    <div class="card">
+
+        <h1>
+            {{ prompt.title }}
+        </h1>
+
+        {% if prompt.media_url %}
+
+            <div class="media">
+
+                {% if prompt.media_type == "video" %}
+
+                    <video
+                        controls
+                        playsinline
+                        preload="metadata"
+                        src="{{ prompt.media_url }}">
+                    </video>
+
+                {% else %}
+
+                    <img
+                        src="{{ prompt.media_url }}"
+                        alt="{{ prompt.title }}"
+                        loading="lazy"
+                        referrerpolicy="no-referrer">
+
+                {% endif %}
+
+            </div>
+
         {% endif %}
+
+
+        <div class="prompt-box">
+            {{ prompt.prompt_text }}
+        </div>
+
+
+        <div class="buttons">
+
+            {% if smartlink and smartlink != "#" %}
+
+                <a
+                    class="btn ad"
+                    href="{{ smartlink }}"
+                    target="_blank"
+                    rel="noopener noreferrer">
+                    🔓 Unlock / Get Resources
+                </a>
+
+            {% endif %}
+
+
+            {% if tg_bot_url and tg_bot_url != "#" %}
+
+                <a
+                    class="btn telegram"
+                    href="{{ tg_bot_url }}">
+                    🤖 Get Prompt in Telegram Bot
+                </a>
+
+            {% else %}
+
+                <div class="warning">
+                    Telegram bot is not configured yet.
+                    Please set the BOT_USERNAME environment variable
+                    on Render.
+                </div>
+
+            {% endif %}
+
+        </div>
+
+
+        {% if popunder_script %}
+
+            <div style="display:none;">
+                {{ popunder_script | safe }}
+            </div>
+
+        {% endif %}
+
+
+        <div class="small">
+            Prompte Channel • AI Prompt Resources
+        </div>
+
     </div>
 
-    <!-- Monetization Button -->
-    <button id="downloadBtn" class="btn-download">📥 Download Full Prompt</button>
-    <p class="info-text">Click button to unlock full prompt in Telegram Bot.</p>
 </div>
-
-<script>
-    let clickCount = 0;
-    const smartlinkUrl = "{{ smartlink }}";
-    const tgBotUrl = "{{ tg_bot_url }}";
-
-    document.getElementById('downloadBtn').addEventListener('click', function() {
-        clickCount++;
-
-        if (clickCount === 1) {
-            // 1st Click: Opens Adsterra Direct Smartlink in a new tab
-            window.open(smartlinkUrl, '_blank');
-            this.innerText = "➡️ Click Again to Get Prompt in Bot";
-            this.style.background = "linear-gradient(135deg, #16a34a, #15803d)";
-        } else {
-            // 2nd Click: Redirects user to Telegram Bot with Prompt ID
-            window.location.href = tgBotUrl;
-        }
-    });
-</script>
 
 </body>
 </html>

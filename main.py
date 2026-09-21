@@ -2,8 +2,16 @@ import asyncio
 import json
 import os
 import threading
+
+# Python 3.14 Fix: Pyrogram import করার আগেই MainThread-এ Event Loop সেট করতে হবে
+try:
+  loop = asyncio.get_event_loop()
+except RuntimeError:
+  loop = asyncio.new_event_loop()
+  asyncio.set_event_loop(loop)
+
 from flask import Flask, jsonify, redirect, render_template, request
-import bot  # Imports our bot logic
+import bot  # Bot logic import
 
 app = Flask(__name__)
 
@@ -62,19 +70,8 @@ def show_prompt_page(prompt_id):
   )
 
 
-# Fix for Python Asyncio Event Loop in Thread
-def start_bot_thread():
-  print('Initializing Background Event Loop for Pyrogram Bot...')
-  loop = asyncio.new_event_loop()
-  asyncio.set_event_loop(loop)
-  try:
-    bot.run_bot()
-  except Exception as e:
-    print(f'Bot Thread Error: {e}')
-
-
-# Start Background Thread for Bot
-threading.Thread(target=start_bot_thread, daemon=True).start()
+# Start Background Bot Thread
+threading.Thread(target=bot.run_bot, daemon=True).start()
 
 if __name__ == '__main__':
   port = int(os.environ.get('PORT', 5000))

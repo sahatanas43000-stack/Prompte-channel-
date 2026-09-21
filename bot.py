@@ -4,12 +4,14 @@ import asyncio
 import random
 import time
 import re
+import hashlib
 from urllib.parse import urljoin
 
 import requests
 
 from pyrogram import Client, filters
 from pyrogram.handlers import MessageHandler
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 # =========================================================
@@ -27,7 +29,7 @@ CHANNEL_USERNAME = os.getenv(
 
 RENDER_EXTERNAL_URL = os.getenv(
     "RENDER_EXTERNAL_URL",
-    ""
+    "https://prompte-channel.onrender.com"
 ).strip().rstrip("/")
 
 
@@ -47,7 +49,7 @@ app = None
 
 
 # =========================================================
-# LOGGING
+# LOG
 # =========================================================
 
 def log(message):
@@ -59,6 +61,7 @@ def log(message):
 # =========================================================
 
 def check_environment():
+
     missing = []
 
     if not API_ID:
@@ -84,28 +87,43 @@ def check_environment():
 
 
 # =========================================================
-# JSON HELPERS
+# JSON
 # =========================================================
 
 def load_json(filename, default):
+
     try:
+
         if not os.path.exists(filename):
             return default
 
-        with open(filename, "r", encoding="utf-8") as f:
+        with open(
+            filename,
+            "r",
+            encoding="utf-8"
+        ) as f:
             return json.load(f)
 
     except Exception as e:
+
         log(
-            f"[JSON] Failed reading {filename}: "
+            f"[JSON] READ ERROR {filename}: "
             f"{type(e).__name__}: {e}"
         )
+
         return default
 
 
 def save_json(filename, data):
+
     try:
-        with open(filename, "w", encoding="utf-8") as f:
+
+        with open(
+            filename,
+            "w",
+            encoding="utf-8"
+        ) as f:
+
             json.dump(
                 data,
                 f,
@@ -116,19 +134,25 @@ def save_json(filename, data):
         return True
 
     except Exception as e:
+
         log(
-            f"[JSON] Failed writing {filename}: "
+            f"[JSON] WRITE ERROR {filename}: "
             f"{type(e).__name__}: {e}"
         )
+
         return False
 
 
 # =========================================================
-# POSTED PROMPTS
+# POSTED DATA
 # =========================================================
 
 def load_posted():
-    data = load_json(POSTED_FILE, [])
+
+    data = load_json(
+        POSTED_FILE,
+        []
+    )
 
     if not isinstance(data, list):
         return []
@@ -136,43 +160,144 @@ def load_posted():
     return data
 
 
-def mark_posted(prompt_id):
+def save_posted(data):
+
+    # Keep the file small.
+    data = data[-500:]
+
+    save_json(
+        POSTED_FILE,
+        data
+    )
+
+
+def mark_posted(prompt):
+
     posted = load_posted()
 
-    if prompt_id not in posted:
-        posted.append(prompt_id)
+    prompt_id = str(
+        prompt.get("id", "")
+    )
 
-    save_json(POSTED_FILE, posted)
+    fingerprint = get_prompt_fingerprint(
+        prompt
+    )
+
+    record = {
+        "id": prompt_id,
+        "fingerprint": fingerprint,
+        "time": int(time.time())
+    }
+
+    posted.append(record)
+
+    save_posted(posted)
+
+
+def already_posted(prompt):
+
+    posted = load_posted()
+
+    fingerprint = get_prompt_fingerprint(
+        prompt
+    )
+
+    prompt_id = str(
+        prompt.get("id", "")
+    )
+
+    for item in posted:
+
+        # Backward compatibility:
+        # old file may contain only IDs.
+        if isinstance(item, str):
+
+            if item == prompt_id:
+                return True
+
+        elif isinstance(item, dict):
+
+            if item.get("id") == prompt_id:
+                return True
+
+            if item.get("fingerprint") == fingerprint:
+                return True
+
+    return False
 
 
 # =========================================================
-# PROMPT DATA
+# DUPLICATE PROTECTION
+# =========================================================
+
+def get_prompt_fingerprint(prompt):
+
+    title = str(
+        prompt.get("title", "")
+    ).strip().lower()
+
+    text = str(
+        prompt.get("prompt_text", "")
+    ).strip().lower()
+
+    media = str(
+        prompt.get("media_url", "")
+    ).strip().lower()
+
+    source = str(
+        prompt.get("source", "")
+    ).strip().lower()
+
+    raw = "|".join([
+        title,
+        text,
+        media,
+        source
+    ])
+
+    return hashlib.sha256(
+        raw.encode("utf-8")
+    ).hexdigest()
+
+
+# =========================================================
+# SAVE PROMPT
 # =========================================================
 
 def save_prompt(prompt):
+
     if not prompt:
         return False
 
-    prompt_id = str(prompt.get("id", "")).strip()
+    prompt_id = str(
+        prompt.get("id", "")
+    ).strip()
 
     if not prompt_id:
         return False
 
-    data = load_json(PROMPTS_FILE, {})
+    data = load_json(
+        PROMPTS_FILE,
+        {}
+    )
 
     if not isinstance(data, dict):
         data = {}
 
     data[prompt_id] = prompt
 
-    return save_json(PROMPTS_FILE, data)
+    return save_json(
+        PROMPTS_FILE,
+        data
+    )
 
 
 # =========================================================
-# URL / IMAGE HELPERS
+# URL
 # =========================================================
 
 def absolute_url(base_url, value):
+
     if not value:
         return ""
 
@@ -181,18 +306,34 @@ def absolute_url(base_url, value):
     if value.startswith("//"):
         return "https:" + value
 
-    return urljoin(base_url, value)
+    return urljoin(
+        base_url,
+        value
+    )
 
+
+# =========================================================
+# IMAGE EXTRACT
+# =========================================================
 
 def extract_image(html, base_url=""):
+
     patterns = [
+
         r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)',
+
         r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image',
+
         r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)',
+
+        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image',
+
         r'<img[^>]+src=["\']([^"\']+)'
+
     ]
 
     for pattern in patterns:
+
         match = re.search(
             pattern,
             html,
@@ -200,6 +341,7 @@ def extract_image(html, base_url=""):
         )
 
         if match:
+
             return absolute_url(
                 base_url,
                 match.group(1)
@@ -209,64 +351,60 @@ def extract_image(html, base_url=""):
 
 
 # =========================================================
-# YOUMIND SCRAPER
+# YOUMIND
 # =========================================================
 
 def fetch_youmind():
+
     log("[SCRAPER] Trying YouMind...")
 
     try:
+
         url = "https://youmind.com/"
 
         response = requests.get(
             url,
             timeout=20,
             headers={
-                "User-Agent": (
+                "User-Agent":
                     "Mozilla/5.0 "
                     "(Windows NT 10.0; Win64; x64) "
                     "AppleWebKit/537.36 "
-                    "Chrome/140 Safari/537.36"
-                )
+                    "Chrome/153 Safari/537.36"
             }
         )
 
         log(
-            f"[YOUMIND] HTTP {response.status_code}"
+            f"[YOUMIND] HTTP "
+            f"{response.status_code}"
         )
 
         if response.status_code != 200:
             return None
 
-        html = response.text
-
         image_url = extract_image(
-            html,
+            response.text,
             url
         )
 
-        prompt_id = f"ym_{int(time.time())}"
-
-        prompt = {
-            "id": prompt_id,
-            "title": "AI Prompt",
-            "prompt_text": (
-                "Create a high-quality AI image "
-                "using this creative prompt."
-            ),
-            "media_url": image_url,
-            "media_type": "image" if image_url else "none",
-            "source": "YouMind",
-        }
-
-        log(
-            f"[SCRAPER] SUCCESS from YouMind: "
-            f"{prompt_id}"
+        prompt_id = (
+            f"ym_{int(time.time())}"
         )
 
-        return prompt
+        return {
+            "id": prompt_id,
+            "title": "AI Prompt",
+            "prompt_text":
+                "Create a high-quality AI image "
+                "using this creative prompt.",
+            "media_url": image_url,
+            "media_type":
+                "image" if image_url else "none",
+            "source": "YouMind"
+        }
 
     except Exception as e:
+
         log(
             f"[YOUMIND] ERROR: "
             f"{type(e).__name__}: {e}"
@@ -280,9 +418,11 @@ def fetch_youmind():
 # =========================================================
 
 def fetch_aixplore():
+
     log("[SCRAPER] Trying AIXplore...")
 
     try:
+
         url = "https://aixplore.app/"
 
         response = requests.get(
@@ -294,7 +434,8 @@ def fetch_aixplore():
         )
 
         log(
-            f"[AIXPLORE] HTTP {response.status_code}"
+            f"[AIXPLORE] HTTP "
+            f"{response.status_code}"
         )
 
         if response.status_code != 200:
@@ -305,21 +446,24 @@ def fetch_aixplore():
             url
         )
 
-        prompt_id = f"ax_{int(time.time())}"
+        prompt_id = (
+            f"ax_{int(time.time())}"
+        )
 
         return {
             "id": prompt_id,
             "title": "AI Prompt",
-            "prompt_text": (
+            "prompt_text":
                 "Create a cinematic AI image "
-                "with professional lighting."
-            ),
+                "with professional lighting.",
             "media_url": image_url,
-            "media_type": "image" if image_url else "none",
-            "source": "AIXplore",
+            "media_type":
+                "image" if image_url else "none",
+            "source": "AIXplore"
         }
 
     except Exception as e:
+
         log(
             f"[AIXPLORE] ERROR: "
             f"{type(e).__name__}: {e}"
@@ -333,9 +477,11 @@ def fetch_aixplore():
 # =========================================================
 
 def fetch_magggic():
+
     log("[SCRAPER] Trying Magggic...")
 
     try:
+
         url = "https://magggic.com/"
 
         response = requests.get(
@@ -347,7 +493,8 @@ def fetch_magggic():
         )
 
         log(
-            f"[MAGGGIC] HTTP {response.status_code}"
+            f"[MAGGGIC] HTTP "
+            f"{response.status_code}"
         )
 
         if response.status_code != 200:
@@ -358,21 +505,24 @@ def fetch_magggic():
             url
         )
 
-        prompt_id = f"mg_{int(time.time())}"
+        prompt_id = (
+            f"mg_{int(time.time())}"
+        )
 
         return {
             "id": prompt_id,
             "title": "Creative AI Prompt",
-            "prompt_text": (
+            "prompt_text":
                 "Generate a detailed and "
-                "creative AI image."
-            ),
+                "creative AI image.",
             "media_url": image_url,
-            "media_type": "image" if image_url else "none",
-            "source": "Magggic",
+            "media_type":
+                "image" if image_url else "none",
+            "source": "Magggic"
         }
 
     except Exception as e:
+
         log(
             f"[MAGGGIC] ERROR: "
             f"{type(e).__name__}: {e}"
@@ -386,32 +536,35 @@ def fetch_magggic():
 # =========================================================
 
 def create_fallback_prompt():
-    prompt_id = f"fallback_{int(time.time())}"
+
+    prompt_id = (
+        f"fallback_{int(time.time())}"
+    )
 
     return {
         "id": prompt_id,
         "title": "AI Image Prompt",
-        "prompt_text": (
+        "prompt_text":
             "A cinematic portrait of a young person "
             "standing in a dramatic urban environment, "
             "soft natural lighting, realistic details, "
-            "professional photography, 35mm film look."
-        ),
+            "professional photography, 35mm film look.",
         "media_url": "",
         "media_type": "none",
-        "source": "Fallback",
+        "source": "Fallback"
     }
 
 
 # =========================================================
-# GET NEXT PROMPT
+# GET UNIQUE PROMPT
 # =========================================================
 
 def get_next_prompt():
+
     scrapers = [
         fetch_youmind,
         fetch_aixplore,
-        fetch_magggic,
+        fetch_magggic
     ]
 
     random.shuffle(scrapers)
@@ -423,48 +576,62 @@ def get_next_prompt():
         if not prompt:
             continue
 
-        prompt_id = str(
-            prompt.get("id", "")
-        )
+        if already_posted(prompt):
 
-        if prompt_id in load_posted():
+            log(
+                "[SCRAPER] Duplicate prompt "
+                "detected. Skipping."
+            )
+
             continue
 
         save_prompt(prompt)
 
         return prompt
 
-    log("[SCRAPER] All sources failed. Using fallback.")
+    log(
+        "[SCRAPER] No new unique prompt found."
+    )
 
-    prompt = create_fallback_prompt()
-
-    save_prompt(prompt)
-
-    return prompt
+    return None
 
 
 # =========================================================
-# TELEGRAM START HANDLER
+# /START
 # =========================================================
 
-async def start_handler(client, message):
+async def start_handler(
+    client,
+    message
+):
 
     try:
+
         text = message.text or ""
 
-        parts = text.split(maxsplit=1)
+        parts = text.split(
+            maxsplit=1
+        )
 
-        prompt_id = ""
+        if len(parts) < 2:
 
-        if len(parts) > 1:
-            prompt_id = parts[1].strip()
+            await message.reply_text(
+                "👋 Send a prompt link to get "
+                "the full prompt."
+            )
+
+            return
+
+        prompt_id = parts[1].strip()
 
         data = load_json(
             PROMPTS_FILE,
             {}
         )
 
-        prompt = data.get(prompt_id)
+        prompt = data.get(
+            prompt_id
+        )
 
         if not prompt:
 
@@ -474,13 +641,18 @@ async def start_handler(client, message):
 
             return
 
+        title = prompt.get(
+            "title",
+            "AI Prompt"
+        )
+
         prompt_text = prompt.get(
             "prompt_text",
             "Prompt unavailable."
         )
 
         await message.reply_text(
-            f"✨ {prompt.get('title', 'AI Prompt')}\n\n"
+            f"✨ {title}\n\n"
             f"{prompt_text}"
         )
 
@@ -491,25 +663,25 @@ async def start_handler(client, message):
             f"{type(e).__name__}: {e}"
         )
 
-        try:
-            await message.reply_text(
-                "❌ Something went wrong."
-            )
-        except Exception:
-            pass
-
 
 # =========================================================
 # CHANNEL POST
 # =========================================================
 
 async def check_and_post():
-    log("[POST] Starting channel post check...")
+
+    log(
+        "[POST] Starting channel post check..."
+    )
 
     prompt = get_next_prompt()
 
     if not prompt:
-        log("[POST] No prompt available.")
+
+        log(
+            "[POST] No NEW prompt available."
+        )
+
         return
 
     prompt_id = str(
@@ -531,10 +703,34 @@ async def check_and_post():
         ""
     )
 
+    # -----------------------------------------------------
+    # LANDING PAGE URL
+    # -----------------------------------------------------
+
+    landing_url = (
+        f"{RENDER_EXTERNAL_URL}"
+        f"/prompt/{prompt_id}"
+    )
+
+    # -----------------------------------------------------
+    # REAL CLICKABLE BUTTON
+    # -----------------------------------------------------
+
+    keyboard = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "🔓 Get Prompt",
+                    url=landing_url
+                )
+            ]
+        ]
+    )
+
     caption = (
         f"✨ {title}\n\n"
         f"{prompt_text}\n\n"
-        f"🔗 Get Prompt"
+        f"👇 Click below to get the prompt."
     )
 
     log(
@@ -542,31 +738,35 @@ async def check_and_post():
         f"{CHANNEL_USERNAME}..."
     )
 
-    try:
+    log(
+        f"[POST] Landing URL: "
+        f"{landing_url}"
+    )
 
-        # IMPORTANT:
-        # This await happens on the SAME event loop
-        # where the Pyrogram client was created.
+    try:
 
         if media_url:
 
             await app.send_photo(
                 chat_id=CHANNEL_USERNAME,
                 photo=media_url,
-                caption=caption
+                caption=caption,
+                reply_markup=keyboard
             )
 
         else:
 
             await app.send_message(
                 chat_id=CHANNEL_USERNAME,
-                text=caption
+                text=caption,
+                reply_markup=keyboard
             )
 
-        mark_posted(prompt_id)
+        mark_posted(prompt)
 
         log(
-            f"[POST] SUCCESS: {prompt_id}"
+            f"[POST] SUCCESS: "
+            f"{prompt_id}"
         )
 
     except Exception as e:
@@ -585,14 +785,15 @@ async def scheduler():
 
     log("[SCHEDULER] Started.")
 
-    # Small delay so Telegram connection finishes.
     await asyncio.sleep(10)
 
     while True:
 
         try:
 
-            log("[SCHEDULER] Running post check...")
+            log(
+                "[SCHEDULER] Running post check..."
+            )
 
             await check_and_post()
 
@@ -603,7 +804,7 @@ async def scheduler():
                 f"{type(e).__name__}: {e}"
             )
 
-        # Run every 10 minutes.
+        # Check every 10 minutes
         await asyncio.sleep(600)
 
 
@@ -615,16 +816,17 @@ async def bot_main():
 
     global app
 
-    log("[BOT] Creating Telegram client...")
+    log(
+        "[BOT] Creating Telegram client..."
+    )
 
     app = Client(
         "prompt_bot",
         api_id=int(API_ID),
         api_hash=API_HASH,
-        bot_token=BOT_TOKEN,
+        bot_token=BOT_TOKEN
     )
 
-    # Register handler AFTER client creation
     app.add_handler(
         MessageHandler(
             start_handler,
@@ -632,7 +834,9 @@ async def bot_main():
         )
     )
 
-    log("[BOT] Starting Telegram client...")
+    log(
+        "[BOT] Starting Telegram client..."
+    )
 
     await app.start()
 
@@ -651,15 +855,16 @@ async def bot_main():
             "for Telegram messages."
         )
 
-        # Scheduler runs on the EXACT SAME LOOP.
         scheduler_task = asyncio.create_task(
             scheduler()
         )
 
         try:
+
             await asyncio.Event().wait()
 
         finally:
+
             scheduler_task.cancel()
 
             try:
@@ -669,7 +874,9 @@ async def bot_main():
 
     finally:
 
-        log("[BOT] Stopping Telegram client...")
+        log(
+            "[BOT] Stopping Telegram client..."
+        )
 
         try:
             await app.stop()
@@ -684,10 +891,16 @@ async def bot_main():
 def run_bot():
 
     if not check_environment():
-        log("[BOT] Environment check failed.")
+
+        log(
+            "[BOT] Environment check failed."
+        )
+
         return
 
-    log("[BOT] Creating Telegram event loop...")
+    log(
+        "[BOT] Creating Telegram event loop..."
+    )
 
     loop = asyncio.new_event_loop()
 
@@ -701,7 +914,9 @@ def run_bot():
 
     except KeyboardInterrupt:
 
-        log("[BOT] Shutdown requested.")
+        log(
+            "[BOT] Shutdown requested."
+        )
 
     except Exception as e:
 
@@ -712,13 +927,8 @@ def run_bot():
 
     finally:
 
-        try:
-            loop.run_until_complete(
-                asyncio.sleep(0)
-            )
-        except Exception:
-            pass
-
         loop.close()
 
-        log("[BOT] Event loop closed.")
+        log(
+            "[BOT] Event loop closed."
+        )

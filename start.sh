@@ -1,2 +1,2 @@
 #!/bin/bash
-gunicorn main:app
+python main.py

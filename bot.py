@@ -244,37 +244,27 @@ def start_handler(client, message):
       " prompts."
   )
 
-def auto_post_loop():
-  # Wait 10 seconds after bot starts before making the first post
-  time.sleep(10)
-  while True:
-    try:
-      check_and_post()
-    except Exception as e:
-      print(f"Loop Exception: {e}")
-    time.sleep(1800)  # Runs every 30 minutes
 
 async def bot_main():
-  # Bot client start
+  # Start Pyrogram Bot Client
   await app.start()
   print("Telegram Bot successfully started and listening for commands!")
 
   # Background auto-posting task
   async def auto_post_task():
-    await asyncio.sleep(10)  # Wait 10 seconds before first check
+    await asyncio.sleep(10)  # Wait 10 seconds before first post check
     while True:
       try:
-        # Run check_and_post in an executor to avoid blocking the async event loop
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, check_and_post)
       except Exception as e:
         print(f"Auto post loop error: {e}")
       await asyncio.sleep(1800)  # 30 minutes
 
-  # Run auto-post loop alongside the bot listener
+  # Run auto-post task in background
   asyncio.create_task(auto_post_task())
 
-  # Keep the async loop running for Pyrogram
+  # Keep async loop active
   await asyncio.Event().wait()
 
 
@@ -286,4 +276,3 @@ def run_bot():
     loop.run_until_complete(bot_main())
   except Exception as e:
     print(f"Bot execution error: {e}")
-

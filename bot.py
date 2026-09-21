@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import random
@@ -249,8 +250,16 @@ def start_handler(client, message):
 
 
 def run_bot():
-  app.start()
+  # Create and set dedicated event loop for background thread
+  try:
+    loop = asyncio.get_event_loop()
+  except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
   print("Multi-Source AI Bot standard engine running...")
+
+  app.start()
 
   while True:
     try:

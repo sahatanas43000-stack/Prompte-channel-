@@ -244,7 +244,6 @@ def start_handler(client, message):
       " prompts."
   )
 
-
 def auto_post_loop():
   # Wait 10 seconds after bot starts before making the first post
   time.sleep(10)
@@ -255,18 +254,36 @@ def auto_post_loop():
       print(f"Loop Exception: {e}")
     time.sleep(1800)  # Runs every 30 minutes
 
+async def bot_main():
+  # Bot client start
+  await app.start()
+  print("Telegram Bot successfully started and listening for commands!")
+
+  # Background auto-posting task
+  async def auto_post_task():
+    await asyncio.sleep(10)  # Wait 10 seconds before first check
+    while True:
+      try:
+        # Run check_and_post in an executor to avoid blocking the async event loop
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, check_and_post)
+      except Exception as e:
+        print(f"Auto post loop error: {e}")
+      await asyncio.sleep(1800)  # 30 minutes
+
+  # Run auto-post loop alongside the bot listener
+  asyncio.create_task(auto_post_task())
+
+  # Keep the async loop running for Pyrogram
+  await asyncio.Event().wait()
+
 
 def run_bot():
-  try:
-    loop = asyncio.get_event_loop()
-  except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
+  loop = asyncio.new_event_loop()
+  asyncio.set_event_loop(loop)
   print("Multi-Source AI Bot standard engine running...")
+  try:
+    loop.run_until_complete(bot_main())
+  except Exception as e:
+    print(f"Bot execution error: {e}")
 
-  # Start auto-posting in a separate background thread
-  threading.Thread(target=auto_post_loop, daemon=True).start()
-
-  # Run Pyrogram natively so events and commands work properly
-  app.run()

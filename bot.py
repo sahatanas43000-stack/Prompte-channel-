@@ -3,6 +3,7 @@ import json
 import os
 import random
 import re
+import threading
 import time
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -61,9 +62,7 @@ def fetch_youmind():
         )
 
       if images:
-        clean_img = (
-            images[0].replace("3a%2f%2f", "").replace("%2f", "/")
-        )  # Clean encoded URL
+        clean_img = images[0].replace("3a%2f%2f", "").replace("%2f", "/")
         return {
             "id": f"ym_{int(time.time())}",
             "title": "YouMind AI Art Prompt",
@@ -110,7 +109,7 @@ def fetch_aixplore():
   return None
 
 
-# 3. Magggic Scraper Engine (Next.js RSC)
+# 3. Magggic Scraper Engine
 def fetch_magggic():
   url = "https://magggic.com/explore"
   headers = {
@@ -149,10 +148,9 @@ def fetch_magggic():
   return None
 
 
-# Multi-Source Manager: Rotates between sources
 def get_next_prompt():
   sources = [fetch_youmind, fetch_aixplore, fetch_magggic]
-  random.shuffle(sources)  # Randomize source order every time
+  random.shuffle(sources)
 
   for fetcher in sources:
     data = fetcher()
@@ -161,7 +159,6 @@ def get_next_prompt():
   return None
 
 
-# Post Prompt to Telegram Channel
 def check_and_post():
   prompt_data = get_next_prompt()
   if not prompt_data:
@@ -209,7 +206,6 @@ def check_and_post():
     print(f"Failed to post on Telegram Channel: {e}")
 
 
-# Telegram Bot Command Handler
 @app.on_message(filters.command("start"))
 def start_handler(client, message):
   args = message.text.split()
@@ -249,8 +245,18 @@ def start_handler(client, message):
   )
 
 
+def auto_post_loop():
+  # Wait 10 seconds after bot starts before making the first post
+  time.sleep(10)
+  while True:
+    try:
+      check_and_post()
+    except Exception as e:
+      print(f"Loop Exception: {e}")
+    time.sleep(1800)  # Runs every 30 minutes
+
+
 def run_bot():
-  # Create and set dedicated event loop for background thread
   try:
     loop = asyncio.get_event_loop()
   except RuntimeError:
@@ -259,11 +265,8 @@ def run_bot():
 
   print("Multi-Source AI Bot standard engine running...")
 
-  app.start()
+  # Start auto-posting in a separate background thread
+  threading.Thread(target=auto_post_loop, daemon=True).start()
 
-  while True:
-    try:
-      check_and_post()
-    except Exception as e:
-      print(f"Loop Exception: {e}")
-    time.sleep(1800)  # Runs every 30 minutes
+  # Run Pyrogram natively so events and commands work properly
+  app.run()

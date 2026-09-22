@@ -2,9 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>{{ prompt.title }} | Prompte Channel</title>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        {{ prompt.title or "AI Prompt" }}
+    </title>
 
     <style>
         * {
@@ -14,97 +20,70 @@
         body {
             margin: 0;
             padding: 20px;
-            background: #111827;
-            color: #ffffff;
             font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #111;
         }
 
         .container {
-            width: 100%;
-            max-width: 700px;
-            margin: 0 auto;
-        }
-
-        .card {
-            background: #1f2937;
-            border-radius: 16px;
-            padding: 20px;
-            overflow: hidden;
+            max-width: 650px;
+            margin: 30px auto;
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
         }
 
         h1 {
             margin-top: 0;
-            font-size: 26px;
+            font-size: 25px;
         }
 
         .media {
             width: 100%;
-            margin: 20px 0;
-            border-radius: 12px;
-            overflow: hidden;
-            background: #000;
-        }
-
-        .media img,
-        .media video {
+            border-radius: 14px;
+            margin: 15px 0 20px;
             display: block;
-            width: 100%;
-            height: auto;
-            max-height: 600px;
-            object-fit: contain;
         }
 
         .prompt-box {
-            margin-top: 20px;
-            padding: 18px;
-            background: #111827;
+            background: #f1f3f5;
             border-radius: 12px;
+            padding: 18px;
+            line-height: 1.6;
             white-space: pre-wrap;
             word-break: break-word;
-            line-height: 1.7;
-            color: #e5e7eb;
-        }
-
-        .buttons {
-            margin-top: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
+            margin-bottom: 20px;
         }
 
         .btn {
             display: block;
             width: 100%;
-            padding: 14px 18px;
-            border-radius: 10px;
+            padding: 15px 18px;
+            margin-top: 12px;
+            border-radius: 12px;
             text-align: center;
             text-decoration: none;
+            font-size: 17px;
             font-weight: bold;
+            border: none;
+            cursor: pointer;
         }
 
-        .telegram {
-            background: #229ed9;
-            color: #ffffff;
+        .telegram-btn {
+            background: #229ED9;
+            color: white;
         }
 
-        .ad {
-            background: #374151;
-            color: #ffffff;
+        .ad-btn {
+            background: #111827;
+            color: white;
         }
 
-        .warning {
-            margin-top: 15px;
-            padding: 12px;
-            border-radius: 10px;
-            background: #451a03;
-            color: #fbbf24;
-            font-size: 14px;
-        }
-
-        .small {
-            margin-top: 15px;
-            color: #9ca3af;
+        .notice {
             font-size: 13px;
+            color: #777;
+            margin-top: 18px;
             text-align: center;
         }
     </style>
@@ -114,97 +93,98 @@
 
 <div class="container">
 
-    <div class="card">
+    <h1>
+        ✨ {{ prompt.title or "AI Prompt" }}
+    </h1>
 
-        <h1>
-            {{ prompt.title }}
-        </h1>
 
-        {% if prompt.media_url %}
+    {% if prompt.media_url %}
 
-            <div class="media">
+        {% if prompt.media_type == "video" %}
 
-                {% if prompt.media_type == "video" %}
+            <video
+                class="media"
+                controls
+                playsinline
+            >
+                <source
+                    src="{{ prompt.media_url }}"
+                >
+            </video>
 
-                    <video
-                        controls
-                        playsinline
-                        preload="metadata"
-                        src="{{ prompt.media_url }}">
-                    </video>
+        {% else %}
 
-                {% else %}
-
-                    <img
-                        src="{{ prompt.media_url }}"
-                        alt="{{ prompt.title }}"
-                        loading="lazy"
-                        referrerpolicy="no-referrer">
-
-                {% endif %}
-
-            </div>
+            <img
+                class="media"
+                src="{{ prompt.media_url }}"
+                alt="AI Prompt Image"
+            >
 
         {% endif %}
 
+    {% endif %}
 
-        <div class="prompt-box">
-            {{ prompt.prompt_text }}
+
+    <div class="prompt-box">
+        {{ prompt.prompt_text }}
+    </div>
+
+
+    <!-- =================================================
+         TELEGRAM BOT BUTTON
+         IMPORTANT:
+         prompt_id is passed with /start
+         ================================================= -->
+
+    {% if tg_bot_url and tg_bot_url != "#" %}
+
+        <a
+            class="btn telegram-btn"
+            href="{{ tg_bot_url }}"
+            target="_blank"
+            rel="noopener noreferrer"
+        >
+            🤖 Get Full Prompt on Telegram
+        </a>
+
+    {% else %}
+
+        <div class="notice">
+            Telegram bot link is not configured.
         </div>
 
-
-        <div class="buttons">
-
-            {% if smartlink and smartlink != "#" %}
-
-                <a
-                    class="btn ad"
-                    href="{{ smartlink }}"
-                    target="_blank"
-                    rel="noopener noreferrer">
-                    🔓 Unlock / Get Resources
-                </a>
-
-            {% endif %}
+    {% endif %}
 
 
-            {% if tg_bot_url and tg_bot_url != "#" %}
+    <!-- =================================================
+         ADSTERRA
+         ================================================= -->
 
-                <a
-                    class="btn telegram"
-                    href="{{ tg_bot_url }}">
-                    🤖 Get Prompt in Telegram Bot
-                </a>
+    {% if smartlink and smartlink != "#" %}
 
-            {% else %}
+        <a
+            class="btn ad-btn"
+            href="{{ smartlink }}"
+            target="_blank"
+            rel="noopener noreferrer"
+        >
+            🔗 Continue
+        </a>
 
-                <div class="warning">
-                    Telegram bot is not configured yet.
-                    Please set the BOT_USERNAME environment variable
-                    on Render.
-                </div>
-
-            {% endif %}
-
-        </div>
+    {% endif %}
 
 
-        {% if popunder_script %}
-
-            <div style="display:none;">
-                {{ popunder_script | safe }}
-            </div>
-
-        {% endif %}
-
-
-        <div class="small">
-            Prompte Channel • AI Prompt Resources
-        </div>
-
+    <div class="notice">
+        Your prompt is ready on Telegram.
     </div>
 
 </div>
+
+
+{% if popunder_script %}
+    {{ popunder_script | safe }}
+{% endif %}
+
 
 </body>
 </html>
